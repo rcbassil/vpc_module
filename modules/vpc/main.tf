@@ -40,3 +40,35 @@ resource "aws_subnet" "private_subnets" {
 
 }
 
+# Internet Gateway
+resource "aws_internet_gateway" "internet_gw" {
+  vpc_id = aws_vpc.application_vpc.id
+
+  tags = {
+    Name = "${var.environment}_internet_gw"
+  }
+}
+
+# public route table
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.application_vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.internet_gw.id
+  }
+
+  tags = {
+    Name = "${var.environment}_public_rt"
+  }
+}
+
+
+# public subnet route table associations
+resource "aws_route_table_association" "public_rta" {
+  subnet_id      = element(aws_subnet.public_subnets.*.id, count.index)
+  route_table_id = aws_route_table.public_rt.id
+  count          = length(aws_subnet.public_subnets)
+}
+
+
