@@ -72,3 +72,46 @@ resource "aws_route_table_association" "public_rta" {
 }
 
 
+# NAT EIPs
+resource "aws_eip" "nat_eip" {
+  vpc   = true
+  count = length(aws_subnet.public_subnets)
+
+  tags = {
+    Name = "${var.environment}_nat_eip"
+  }
+}
+
+# NAT Gateway
+resource "aws_nat_gateway" "nat_gw" {
+  allocation_id = element(aws_eip.nat_eip.*.id, count.index)
+  subnet_id     = element(aws_subnet.public_subnets.*.id, count.index)
+  count         = length(aws_subnet.public_subnets)
+
+  tags = {
+    Name = "${var.environment}_nat_gw"
+  }
+}
+
+
+# private route table
+resource "aws_route_table" "private_rt" {
+  vpc_id = aws_vpc.application_vpc.id
+  count  = length(aws_nat_gateway.nat_gw)
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    nat_gateway_id = element(aws_nat_gateway.nat_gw.*.id, count.index)
+  }
+
+  tags = {
+    Name = "${var.environment}_private_rt_${substr(element(var.availability_zones, count.index), -1, 1)}"
+  }
+}
+
+# private subnet route table associations
+resource "aws_route_table_association" "private_rta" {
+  subnet_id      = element(aws_subnet.private_subnets.*.id, count.index)
+  route_table_id = element(aws_route_table.private_rt.*.id, count.index)
+  count          = length(aws_subnet.private_subnets)
+}
